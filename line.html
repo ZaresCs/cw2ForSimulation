@@ -1,0 +1,213 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="d3.min.js"></script>
+    <script src="d3-tip.min.js"></script>
+    <title></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #lineChart {
+            width: 60%;
+            height: 600px;
+            margin: 0 auto;
+            display: block;
+        }
+
+        p {
+            font-size: 0.9em;
+            line-height: 1.5em;
+        }
+
+        #Btn {
+            width: 200px;
+            height: 60px;
+            background-color: #59c827;
+            line-height: 60px;
+            border: none;
+            color: white;
+            cursor: pointer;
+            text-align: center;
+            margin: 0 auto;
+            font-size: 23px;
+            font-weight: bold;
+            margin: 0 auto;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <svg id="lineChart"></svg>
+
+    <input type="button" id="Btn" value="Show BarChart" />
+    <script>
+        document.getElementById("Btn").addEventListener('click', function () {
+            location.href = "bar.html";
+        });
+
+
+
+        d3.csv("Crime_rate.csv").then(function (Crime_rate) {
+            Crime_rate.forEach(function (o) {
+                o["Value"] = Number(o["Crime_rate"]).toFixed(3);
+            });
+            d3.csv("Temperature.csv").then(function (Temperature) {
+                Temperature.forEach(function (o) {
+                    o["Value"] = Number(o["Temperature"]).toFixed(3);
+                });
+                var data = {
+                    "Crime_rate": Crime_rate,
+                    "Temperature": Temperature
+                };
+                drawLine(data);
+            });
+        });
+
+        var line = {};
+
+
+        function drawLine(data) {
+            line.data = data;
+            line.margin = { top: 60, right: 120, bottom: 30, left: 30 },
+                line.width = 960 - line.margin.left - line.margin.right,
+                line.height = 500 - line.margin.top - line.margin.bottom;
+
+            line.svg = d3.select("#lineChart")
+                .append("g")
+                .attr("transform", "translate(" + line.margin.left + "," + line.margin.top + ")");
+
+            line.tooltip = d3.tip()
+                .attr("class", "tooltip")
+                .html(function (d, i) {
+                    return d.Value;
+                });
+            line.svg.call(line.tooltip);
+
+            line.svg.append("text")
+                .attr("x", line.width)
+                .attr("y", line.height + 50)
+                .text("Month")
+
+            line.names = [];
+            line.flag = {};
+            for (var i in data) {
+                line.flag[i] = true;
+                line.names.push(i);
+            }
+
+            line.months = data["Crime_rate"].map(o => o.Month);
+
+            line.colors = d3.scaleOrdinal().domain(line.names).range(d3.schemeSet2);
+
+            line.x = d3.scaleBand()
+                .domain(line.months)
+                .range([0, line.width]);
+            line.svg.append("g")
+                .attr("transform", "translate(0," + line.height + ")")
+                .call(d3.axisBottom(line.x));
+
+            // Add Y axis
+            line.y = d3.scaleLinear()
+                .domain([0, d3.max(data["Temperature"].map(o => Number(o.Value)))])
+                .range([line.height, 0]);
+            line.asixY = line.svg.append("g")
+                .call(d3.axisLeft(line.y));
+
+            // Add the lines
+            line.line = d3.line()
+                .x(function (d) { return line.x(d.Month) + 35 })
+                .y(function (d) { return line.y(d.Value) });
+
+            line.path = line.svg.selectAll("myLines")
+                .data(line.names)
+                .enter()
+                .append("path")
+                .attr("class", function (d) { return d })
+                .attr("d", function (d) { return line.line(data[d]) })
+                .attr("stroke", function (d) { return line.colors(d) })
+                .style("stroke-width", 4)
+                .style("fill", "none")
+
+            line.dot = line.svg.selectAll("myDots")
+                .data(line.names)
+                .enter()
+                .append('g')
+                .style("fill", function (d) { return line.colors(d) })
+                .attr("class", function (d) { return d })
+                .selectAll("myPoints")
+                .data(function (d) { return data[d] })
+                .enter()
+                .append("circle")
+                .attr("cx", function (d) { return line.x(d.Month) + 35 })
+                .attr("cy", function (d) { return line.y(d.Value) })
+                .attr("r", 5)
+                .attr("stroke", "white")
+                .on("mouseover", line.tooltip.show)
+                .on("mouseout", line.tooltip.hide);
+
+            line.label = line.svg
+                .selectAll("myLabels")
+                .data(line.names)
+                .enter()
+                .append('g')
+                .append("text")
+                .attr("class", function (d) { return d })
+                .datum(function (d) { return { name: d, value: data[d][data[d].length - 1] }; })
+                .attr("transform", function (d) { return "translate(" + line.x(d.value.Month) + "," + line.y(d.value.Value) + ")"; })
+                .attr("x", 42)
+                .text(function (d) { return d.name; })
+                .style("fill", function (d) { return line.colors(d.name) })
+                .style("font-size", 15)
+
+
+            line.svg
+                .selectAll("myLegend")
+                .data(line.names)
+                .enter()
+                .append('g')
+                .append("text")
+                .attr('x', function (d, i) { return 20 + i * 90 })
+                .attr('y', 30)
+                .text(function (d) { return d; })
+                .style("fill", function (d) { return line.colors(d) })
+                .style("font-size", 15)
+                .on("click", function (d) {
+                    line.flag[d] = line.flag[d] == true ? false : true;
+                    update();
+                    currentOpacity = d3.selectAll("." + d).style("opacity")
+                    d3.selectAll("." + d).transition().style("opacity", currentOpacity == 1 ? 0 : 1)
+                })
+
+        }
+
+        function update() {
+            if (line.flag["Crime_rate"] == false && line.flag["Temperature"] == false) {
+                return;
+            }
+
+            if (line.flag["Temperature"] == true) {
+                line.y.domain([0, d3.max(line.data["Temperature"].map(o => Number(o.Value)))])
+                line.asixY.call(d3.axisLeft(line.y));
+            } else {
+                line.y.domain([d3.min(line.data["Crime_rate"].map(o => Number(o.Value))) - 5, d3.max(line.data["Crime_rate"].map(o => Number(o.Value))) + 7])
+                line.asixY.call(d3.axisLeft(line.y));
+            }
+
+            line.line = d3.line()
+                .x(function (d) { return line.x(d.Month) + 35 })
+                .y(function (d) { return line.y(d.Value) });
+            console.log(11);
+            line.path.attr("d", function (d) { return line.line(line.data[d]) })
+
+            line.dot.attr("cy", function (d) { return line.y(d.Value) })
+
+            line.label.attr("transform", function (d) { return "translate(" + line.x(d.value.Month) + "," + line.y(d.value.Value) + ")"; })
+        }
+    </script>
+</body>
+</html>
